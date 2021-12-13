@@ -30,6 +30,11 @@ DHT dht(DHTPIN, DHTTYPE);
 
 float t = 0.0;
 float h = 0.0;
+float l = 0.0;
+
+char strT[9];
+char strH[7];
+char strL[7];
 
 
 WiFiClient espClient;
@@ -76,10 +81,7 @@ void reconnect() {
       // Once connected, publish an announcement...
       client.publish("outTopic", "hello world");
       // ... and resubscribe
-      client.subscribe("LED");
-      client.subscribe("Green");
-      client.subscribe("Blue");
-      client.subscribe("Red");
+      client.subscribe("OnOff");
     } else {
       Serial.print("failed, rc=");
       Serial.print(client.state());
@@ -110,54 +112,27 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
   Serial.println();
   
-  if (String(topic) == "LED"){
+  if (String(topic) == "OnOff"){
     Serial.print("LED = ");
-    if (String(message) == "true"){ 
+    if (String(message) == "ON"){ 
       Serial.print("ON");
-      analogWrite(Gpin, green,255);
-      analogWrite(Rpin, red);
-      analogWrite(Bpin, blue);
+      //Tout allumer
       }
-    else if (String(message) == "false"){
-      Serial.print("OFF");
-      analogWrite(Gpin, 0);
-      analogWrite(Rpin, 0);
-      analogWrite(Bpin, 0);
+    else if (String(message) == "OFF"){
+      //Tout xteindre
       }
     else{
       Serial.print("Err");
-      digitalWrite(ledPin,HIGH);
+      digitalWrite(ledbp,HIGH);
       delay(200);
-      digitalWrite(ledPin,LOW);
+      digitalWrite(ledbp,LOW);
       delay(200);
-      digitalWrite(ledPin,HIGH);
+      digitalWrite(ledbp,HIGH);
       delay(100);
-      digitalWrite(ledPin,LOW);
+      digitalWrite(ledbp,LOW);
       delay(100);
 
     }
-  }
-  else if (String(topic) == "Green" or "Blue" or "Red"){
-    
-    int pin;
-    int color = atoi(message);
-    Serial.print("Brightness : ");
-    Serial.print(message);
-    Serial.println();
-
-    if (String(topic) == "Green"){
-      green = color;
-      pin = Gpin;
-    }
-    else if (String(topic) == "Red"){
-      red = color;
-      pin = Rpin;
-    }
-    else if (String(topic) == "Blue"){
-      blue = color;
-      pin = Bpin;
-    } 
-    analogWrite(pin,color);
   }
   else{ Serial.println("Error topic");
   }
@@ -214,18 +189,20 @@ void task_lectdata(){
 }
 
 void task_dataProcess(){
+
 if (!client.connected()) {
 reconnect();
 }
 
 client.loop(); 
 
-char strT[9];
-char strH[7];
+
   
 
 sprintf(strT,"%2.1f",t);
-sprintf(strH,"%03.1f",h);
+sprintf(strH,"%3.1f",h);
+sprintf(strL,"%3.1f",l);
+
 unsigned long now = millis();
   if (now - lastMsg > 15000) {
     t = dht.readTemperature();
@@ -235,16 +212,18 @@ unsigned long now = millis();
     ++value;
     snprintf (msg, MSG_BUFFER_SIZE, "hello world #%ld", value);
     Serial.print("Publish message: ");
-    Serial.print(" BP = ");
-    Serial.println(BPstate);
  
     client.publish("HUM",strH);
     client.publish("TEMP",strT);
+    client.publish("LUM",strL);
 
     Serial.print(" hum = ");
     Serial.print(h);
     Serial.print(" temp = ");
     Serial.print(t);
+    Serial.print(" lum = ");
+    Serial.print(l);
+    
     Serial.print(" ");
     Serial.println(" ");
   }

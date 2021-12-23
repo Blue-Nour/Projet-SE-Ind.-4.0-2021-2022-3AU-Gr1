@@ -4,6 +4,13 @@
 #include <Adafruit_Sensor.h>
 #include <DHT.h>
 #include <analogWrite.h>
+#include <Wire.h>
+#include <SPI.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+static SemaphoreHandle_t Token;
+//static SemaphoreHandle_t ledBsem; 
 
 bool bpState = 0;
 bool lastState = 0;
@@ -16,13 +23,15 @@ const int ledLum = 15;
 bool ledbpState = LOW;
 bool ledLumState = LOW;
 
+unsigned long lastMsg;
 
 const char* ssid = "NOURA";
-const char* password = "N1999zar";
-
+const char* password = "N1999zaru";
 
 const char* mqtt_server = "192.168.231.182";
 const int   mqtt_port = 1883;
+
+const int LumPin = 36;
 
 #define DHTPIN 17
 #define DHTTYPE    DHT11
@@ -35,7 +44,6 @@ float l = 0.0;
 char strT[9];
 char strH[7];
 char strL[7];
-
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -103,7 +111,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
     Serial.print((char)payload[i]);
     message[i] = (char)payload[i];
   }
-  
+    
   message[length] = '\0';
   Serial.println("_");
   Serial.print("___");
@@ -118,9 +126,11 @@ void callback(char* topic, byte* payload, unsigned int length) {
       Serial.print("ON");
       //Tout allumer
       }
+
     else if (String(message) == "OFF"){
       //Tout xteindre
       }
+
     else{
       Serial.print("Err");
       digitalWrite(ledbp,HIGH);
@@ -136,68 +146,38 @@ void callback(char* topic, byte* payload, unsigned int length) {
   }
   else{ Serial.println("Error topic");
   }
+
   Serial.println();
 }
 
-void reconnect() {
-  // Loop until we're reconnected
-  while (!client.connected()) {
-    Serial.print("Attempting MQTT connection...");
-    // Create a random client ID
-
-    String Id = "ID - ESP  32" ;
-    Id += String(random(0xffff), HEX);
-    // Attempt to connect
-    if (client.connect(Id.c_str())) {             //Connection mqtt broker
-      Serial.println("connected");
-      // Once connected, publish an announcement...
-      client.publish("outTopic", "hello world");
-      // ... and resubscribe
-      client.subscribe("LED");
-      client.subscribe("Green");
-      client.subscribe("Blue");
-      client.subscribe("Red");
-    } else {
-      Serial.print("failed, rc=");
-      Serial.print(client.state());
-      Serial.println(" try again in 5 seconds");
-      // Wait 5 seconds before retrying
-      delay(5000);
-    }
-  }
-}
-
-void task_BP(){
+void task_BP(void * arg){
 //Lecture BP
-bpState = digitalRead(BP);
-if(bpState != lastState){
-    if(bpState){
-        //ON
-    }
-    else{
-        //OFF
-    }
-    lastState = bpState;
+
+  for(;;){
+    bpState = digitalRead((int)arg);
+      if(bpState != lastState){
+        if(bpState){
+            //ON
+            digitalWrite(BP,HIGH);
+        }
+        
+        else{
+            //OFF
+            digitalWrite(BP,LOW);
+        }
+        lastState = bpState;
+      }
+  }
+
 }
 
-void task_lectdata(){  
-//lecture temp
-
-//lecture hum
-
-//Lecture lum
-}
-
-void task_dataProcess(){
-
-if (!client.connected()) {
+void task_lectdata(void * arg){ 
+  for(;;){
+    if (!client.connected()) {
 reconnect();
 }
 
 client.loop(); 
-
-
-  
 
 sprintf(strT,"%2.1f",t);
 sprintf(strH,"%3.1f",h);
@@ -205,17 +185,44 @@ sprintf(strL,"%3.1f",l);
 
 unsigned long now = millis();
   if (now - lastMsg > 15000) {
+    //take sema
+    // take sema lum
+
     t = dht.readTemperature();
     h = dht.readHumidity();
+    l = analogRead((int)arg)*100/4096;
     
     lastMsg = now;
     ++value;
-    snprintf (msg, MSG_BUFFER_SIZE, "hello world #%ld", value);
-    Serial.print("Publish message: ");
+    snprintf (msg, MSG_BUFFER_SIZE, "hello world #%ld", value);  
+
+    //Envoi temp
+    //Envoi hum
+    //Envoi lum g
+
+    //give sema 
+    //give sema lum
  
-    client.publish("HUM",strH);
+
+  }
+  } 
+
+//lecture temp
+
+//lecture hum
+
+//Lecture lum
+}
+
+void task_dataProcess(void * arg){
+
+for(;;){
+  //take sema
+Serial.print("Publish message: ");
+      client.publish("HUM",strH);
     client.publish("TEMP",strT);
     client.publish("LUM",strL);
+    
 
     Serial.print(" hum = ");
     Serial.print(h);
@@ -226,18 +233,23 @@ unsigned long now = millis();
     
     Serial.print(" ");
     Serial.println(" ");
-  }
-//Envoi temp
 
-//Envoi hum
-
-//Envoi lum
+//give sema
 
 //Affichage donnxes
+}
 
 }
 
-void task_lum(){
+void task_lum(void * arg){
+  for(;;){
+  if (l < 50){
+    digitalWrite((int)arg,HIGH);
+  }
+  else{
+    digitalWrite((int)arg,LOW);
+  }
+  }
 //if lum -> sombre
     //Allumer led
 //else
@@ -246,18 +258,33 @@ void task_lum(){
 }
 
 void setup(){
+  BaseType_t rc;
+
   dht.begin();
-  pinMode(ledPin, OUTPUT);
-  pinMode(BPpin,INPUT);
-  digitalWrite(ledPin, ledState);
+  pinMode(ledbp, OUTPUT);
+  pinMode(BP,INPUT);
+  digitalWrite(ledbp, ledbpState);
 
   Serial.begin(115200);
   setup_wifi();
   client.setServer(mqtt_server,mqtt_port);
   client.setCallback(callback);
 
+  rc = xTaskCreate(task_dataProcess,"process",1000,NULL,2,&Token); 
+  assert(rc == pdPASS); 
+
+  rc = xTaskCreate(task_BP,"BP",1000,(void*)BP,1,&Token);
+    assert(rc == pdPASS); 
+
+  //Creation of ledA task 
+  rc = xTaskCreate(task_lectdata,"lectdata",1000,(void*)LumPin,1,&Token);
+  assert(rc == pdPASS); 
+
+    rc = xTaskCreate(task_lum,"Lum",1000,(void*)ledLum,1,&Token);
+  assert(rc == pdPASS); 
+
 }
 
 void loop(){
 
-}
+} 

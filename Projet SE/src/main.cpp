@@ -25,10 +25,10 @@ bool ledLumState = LOW;
 
 unsigned long lastMsg;
 
-const char* ssid = "NOURA";
-const char* password = "N1999zaru";
+const char* ssid = "VOO-006709";
+const char* password = "JHPYEPQQ";
 
-const char* mqtt_server = "192.168.231.182";
+const char* mqtt_server = "192.168.0.30";
 const int   mqtt_port = 1883;
 
 const int LumPin = 36;
@@ -44,6 +44,9 @@ float l = 0.0;
 char strT[9];
 char strH[7];
 char strL[7];
+
+bool OnOff = 0;
+bool lectState =0;
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -124,11 +127,13 @@ void callback(char* topic, byte* payload, unsigned int length) {
     Serial.print("LED = ");
     if (String(message) == "ON"){ 
       Serial.print("ON");
+      OnOff = 1;
       //Tout allumer
       }
 
     else if (String(message) == "OFF"){
       //Tout xteindre
+      OnOff = 1;
       }
 
     else{
@@ -152,18 +157,19 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
 void task_BP(void * arg){
 //Lecture BP
-
   for(;;){
     bpState = digitalRead((int)arg);
       if(bpState != lastState){
         if(bpState){
             //ON
             digitalWrite(BP,HIGH);
+            lectState = 1;
         }
-        
+
         else{
             //OFF
             digitalWrite(BP,LOW);
+            lectState = 0;
         }
         lastState = bpState;
       }
@@ -172,9 +178,13 @@ void task_BP(void * arg){
 }
 
 void task_lectdata(void * arg){ 
+  BaseType_t rc;
+
   for(;;){
+  rc = xSemaphoreTake(Token,portMAX_DELAY); 
+  assert(rc == pdPASS);
     if (!client.connected()) {
-reconnect();
+    reconnect();
 }
 
 client.loop(); 
@@ -184,65 +194,71 @@ sprintf(strH,"%3.1f",h);
 sprintf(strL,"%3.1f",l);
 
 unsigned long now = millis();
-  if (now - lastMsg > 15000) {
+  if (now - lastMsg > 15000 or lectState) {
+
     //take sema
     // take sema lum
 
     t = dht.readTemperature();
     h = dht.readHumidity();
     l = analogRead((int)arg)*100/4096;
+    //lecture temp
+
+    //lecture hum
+
+    //Lecture lum
     
     lastMsg = now;
     ++value;
     snprintf (msg, MSG_BUFFER_SIZE, "hello world #%ld", value);  
 
-    //Envoi temp
-    //Envoi hum
-    //Envoi lum g
-
     //give sema 
     //give sema lum
- 
+    rc = xSemaphoreGive(Token);  
+    assert(rc == pdPASS);
 
   }
   } 
-
-//lecture temp
-
-//lecture hum
-
-//Lecture lum
 }
 
 void task_dataProcess(void * arg){
+BaseType_t rc;
 
 for(;;){
   //take sema
-Serial.print("Publish message: ");
-      client.publish("HUM",strH);
-    client.publish("TEMP",strT);
-    client.publish("LUM",strL);
-    
+  rc = xSemaphoreTake(Token,portMAX_DELAY); 
+  assert(rc == pdPASS);
+  Serial.print("Publish message: ");
+  client.publish("HUM",strH);
+  client.publish("TEMP",strT);
+  client.publish("LUM",strL);
+  
 
-    Serial.print(" hum = ");
-    Serial.print(h);
-    Serial.print(" temp = ");
-    Serial.print(t);
-    Serial.print(" lum = ");
-    Serial.print(l);
-    
-    Serial.print(" ");
-    Serial.println(" ");
-
-//give sema
+  Serial.print(" hum = ");
+  Serial.print(h);
+  Serial.print(" temp = ");
+  Serial.print(t);
+  Serial.print(" lum = ");
+  Serial.print(l);
+  
+  Serial.print(" ");
+  Serial.println(" ");
 
 //Affichage donnxes
+
+//give sema
+rc = xSemaphoreGive(Token);  
+assert(rc == pdPASS);
 }
 
 }
 
 void task_lum(void * arg){
+  BaseType_t rc;
   for(;;){
+  
+  rc = xSemaphoreTake(Token,portMAX_DELAY); 
+  assert(rc == pdPASS);
   if (l < 50){
     digitalWrite((int)arg,HIGH);
   }
@@ -250,6 +266,9 @@ void task_lum(void * arg){
     digitalWrite((int)arg,LOW);
   }
   }
+
+  rc = xSemaphoreGive(Token);  
+  assert(rc == pdPASS);
 //if lum -> sombre
     //Allumer led
 //else

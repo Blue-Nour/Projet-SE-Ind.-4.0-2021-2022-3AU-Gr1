@@ -8,9 +8,11 @@
 #include <SPI.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+ 
+static TaskHandle_t tasklect;
+static TaskHandle_t taskprocess;
+static TaskHandle_t tasklum;
 
-static SemaphoreHandle_t Token;
-//static SemaphoreHandle_t ledBsem; 
 
 bool bpState = 0;
 bool lastState = 0;
@@ -19,6 +21,7 @@ int BP = 18;
 const int ledbp = 4;
 const int ledOnOff = 2;
 const int ledLum = 15;
+int lum;
 
 bool ledbpState = LOW;
 bool ledLumState = LOW;
@@ -31,22 +34,26 @@ const char* password = "JHPYEPQQ";
 const char* mqtt_server = "192.168.0.30";
 const int   mqtt_port = 1883;
 
-const int LumPin = 36;
+const int LumPin = 32;
 
-#define DHTPIN 17
+#define DHTPIN 12
 #define DHTTYPE    DHT11
 DHT dht(DHTPIN, DHTTYPE);
 
-float t = 0.0;
-float h = 0.0;
-float l = 0.0;
+double t = 0.0;
+double h = 0.0;
+double l = 0.0;
 
 char strT[9];
 char strH[7];
-char strL[7];
+char strL[8];
 
-bool OnOff = 0;
+bool OnOff = 1;
 bool lectState =0;
+bool start = 1;
+bool lumState = 0;
+bool prosState = 0;
+bool stop = 0;
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -155,155 +162,175 @@ void callback(char* topic, byte* payload, unsigned int length) {
   Serial.println();
 }
 
-void task_BP(void * arg){
-//Lecture BP
-  for(;;){
-    bpState = digitalRead((int)arg);
-      if(bpState != lastState){
-        if(bpState){
-            //ON
-            digitalWrite(BP,HIGH);
-            lectState = 1;
-        }
-
-        else{
-            //OFF
-            digitalWrite(BP,LOW);
-            lectState = 0;
-        }
-        lastState = bpState;
-      }
-  }
-
-}
 
 void task_lectdata(void * arg){ 
-  BaseType_t rc;
-
   for(;;){
-  rc = xSemaphoreTake(Token,portMAX_DELAY); 
-  assert(rc == pdPASS);
-    if (!client.connected()) {
-    reconnect();
-}
-
-client.loop(); 
-
-sprintf(strT,"%2.1f",t);
-sprintf(strH,"%3.1f",h);
-sprintf(strL,"%3.1f",l);
-
-unsigned long now = millis();
-  if (now - lastMsg > 15000 or lectState) {
+    Serial.println("Lect data ...");
 
     //take sema
     // take sema lum
 
     t = dht.readTemperature();
     h = dht.readHumidity();
-    l = analogRead((int)arg)*100/4096;
+    lum = analogRead((int)arg);
+    l = lum*100;
+    l = l/4096;
+    vTaskDelay(500/portTICK_PERIOD_MS);
+
+    if(isnan(h) or isnan(t)){h = 0;
+    t= 0;
+    Serial.println("error dht");}
+   
     //lecture temp
-
     //lecture hum
-
     //Lecture lum
-    
-    lastMsg = now;
-    ++value;
-    snprintf (msg, MSG_BUFFER_SIZE, "hello world #%ld", value);  
+
+    sprintf(strT,"%2.1f",t);
+    sprintf(strH,"%3.1f",h);
+    sprintf(strL,"%3.1f",l);  
 
     //give sema 
     //give sema lum
-    rc = xSemaphoreGive(Token);  
-    assert(rc == pdPASS);
+    vTaskResume(taskprocess);     
+    vTaskSuspend(tasklect);
+   
+  }
 
   }
-  } 
-}
 
 void task_dataProcess(void * arg){
-BaseType_t rc;
 
 for(;;){
   //take sema
-  rc = xSemaphoreTake(Token,portMAX_DELAY); 
-  assert(rc == pdPASS);
+  
+  
   Serial.print("Publish message: ");
-  client.publish("HUM",strH);
-  client.publish("TEMP",strT);
-  client.publish("LUM",strL);
+  client.publish("esp1/humidite",strH);
+  client.publish("esp1/temperature",strT);
+  client.publish("esp1/luminosite",strL);
   
 
   Serial.print(" hum = ");
-  Serial.print(h);
+  Serial.print(strH);
   Serial.print(" temp = ");
-  Serial.print(t);
+  Serial.print(strT);
+
   Serial.print(" lum = ");
-  Serial.print(l);
+  Serial.print(strL);
   
   Serial.print(" ");
-  Serial.println(" ");
+  Serial.println(" ");  
+
+ 
+   vTaskResume(tasklum);
+  Serial.println("stopped");
+   vTaskSuspend(taskprocess);
 
 //Affichage donnxes
 
-//give sema
-rc = xSemaphoreGive(Token);  
-assert(rc == pdPASS);
 }
 
 }
 
 void task_lum(void * arg){
-  BaseType_t rc;
   for(;;){
-  
-  rc = xSemaphoreTake(Token,portMAX_DELAY); 
-  assert(rc == pdPASS);
-  if (l < 50){
+  if (l < 0.5){
     digitalWrite((int)arg,HIGH);
   }
   else{
     digitalWrite((int)arg,LOW);
   }
-  }
+  vTaskSuspend(tasklum);
 
-  rc = xSemaphoreGive(Token);  
-  assert(rc == pdPASS);
-//if lum -> sombre
-    //Allumer led
-//else
-    //xteindre led
 
-}
+}}
 
 void setup(){
-  BaseType_t rc;
-
-  dht.begin();
+ 
   pinMode(ledbp, OUTPUT);
   pinMode(BP,INPUT);
+  pinMode(LumPin,INPUT);
+  pinMode(ledLum,OUTPUT);
+  pinMode(ledOnOff,OUTPUT);
   digitalWrite(ledbp, ledbpState);
+  digitalWrite(ledLum,LOW);
 
   Serial.begin(115200);
   setup_wifi();
   client.setServer(mqtt_server,mqtt_port);
   client.setCallback(callback);
+  
+  if (!client.connected()) {
+    reconnect();
+    client.loop(); 
+  }
 
-  rc = xTaskCreate(task_dataProcess,"process",1000,NULL,2,&Token); 
-  assert(rc == pdPASS); 
-
-  rc = xTaskCreate(task_BP,"BP",1000,(void*)BP,1,&Token);
-    assert(rc == pdPASS); 
-
+  xTaskCreatePinnedToCore(task_lectdata,"lectdata",1000,(void*)LumPin,1,&tasklect,NULL); 
+  vTaskSuspend(tasklect);
   //Creation of ledA task 
-  rc = xTaskCreate(task_lectdata,"lectdata",1000,(void*)LumPin,1,&Token);
-  assert(rc == pdPASS); 
+  xTaskCreatePinnedToCore(task_dataProcess,"process",1000,NULL,1,&taskprocess,NULL);
+  vTaskSuspend(taskprocess);
 
-    rc = xTaskCreate(task_lum,"Lum",1000,(void*)ledLum,1,&Token);
-  assert(rc == pdPASS); 
+  xTaskCreatePinnedToCore(task_lum,"Lum",1000,(void*)ledLum,1,&tasklum,NULL);
+  vTaskSuspend(tasklum);
+
+
+  dht.begin();
 
 }
 
 void loop(){
+  if (OnOff){
+
+    while (!client.connected()) {
+    reconnect();
+    client.loop();}
+
+     if(!digitalRead(ledOnOff)){
+    digitalWrite(ledOnOff,HIGH);}
+
+    bpState = digitalRead(BP);
+      if(bpState != lastState){
+        if(bpState){
+            digitalWrite(ledbp,HIGH);
+            lectState = 1;
+        }
+
+        else{
+            digitalWrite(ledbp,LOW);
+           
+        }
+        lastState = bpState;
+        Serial.println("BP State");
+        Serial.println(lectState);
+      }
+      
+
+  unsigned long now = millis();
+  if (now - lastMsg > 120000) {
+
+    if(eTaskGetState(tasklect) == eSuspended){
+    vTaskResume(tasklect); }
+    
+     lastMsg = now;   
+    }
+    
+  if (lectState){
+    if(eTaskGetState(tasklect) == eSuspended){
+    vTaskResume(tasklect);
+     lectState = 0;
+    }
+  }
+  }
+  else{
+    vTaskSuspend(tasklect);
+    vTaskSuspend(taskprocess);
+    vTaskSuspend(tasklum);
+
+    digitalWrite(ledbp,LOW);
+    digitalWrite(ledLum,LOW);
+    digitalWrite(ledOnOff,LOW);
+  }
+
 
 } 

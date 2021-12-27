@@ -265,13 +265,13 @@ void setup(){
     client.loop(); 
   }
 
-  xTaskCreatePinnedToCore(task_lectdata,"lectdata",1000,(void*)LumPin,1,&tasklect,NULL); 
+  xTaskCreatePinnedToCore(task_lectdata,"lectdata",8000,(void*)LumPin,1,&tasklect,NULL); 
   vTaskSuspend(tasklect);
   //Creation of ledA task 
-  xTaskCreatePinnedToCore(task_dataProcess,"process",1000,NULL,1,&taskprocess,NULL);
+  xTaskCreatePinnedToCore(task_dataProcess,"process",8000,NULL,1,&taskprocess,NULL);
   vTaskSuspend(taskprocess);
 
-  xTaskCreatePinnedToCore(task_lum,"Lum",1000,(void*)ledLum,1,&tasklum,NULL);
+  xTaskCreatePinnedToCore(task_lum,"Lum",8000,(void*)ledLum,1,&tasklum,NULL);
   vTaskSuspend(tasklum);
 
 
@@ -307,7 +307,7 @@ void loop(){
       
 
   unsigned long now = millis();
-  if (now - lastMsg > 120000) {
+  if (now - lastMsg > 12000) {
 
     if(eTaskGetState(tasklect) == eSuspended){
     vTaskResume(tasklect); }

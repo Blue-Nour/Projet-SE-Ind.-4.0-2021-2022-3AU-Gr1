@@ -14,13 +14,6 @@
 #include <stdlib.h>
 #include <WiFi.h>
 
- 
-
-
-
-
-
- //
 
 #define nombreDePixelsEnLargeur 128         // Taille de l'écran OLED, en pixel, au niveau de sa largeur
 #define nombreDePixelsEnHauteur 64          // Taille de l'écran OLED, en pixel, au niveau de sa hauteur

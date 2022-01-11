@@ -14,13 +14,20 @@
 #include <stdlib.h>
 #include <WiFi.h>
 
+ 
+
+
+
+
+
+ //
 
 #define nombreDePixelsEnLargeur 128         // Taille de l'écran OLED, en pixel, au niveau de sa largeur
 #define nombreDePixelsEnHauteur 64          // Taille de l'écran OLED, en pixel, au niveau de sa hauteur
 #define brocheResetOLED         -1          // Reset de l'OLED partagé avec l'Arduino (d'où la valeur à -1, et non un numéro de pin)
 #define adresseI2CecranOLED     0x3C        // Adresse de "mon" écran OLED sur le bus i2c (généralement égal à 0x3C ou 0x3D)
 
-Adafruit_SSD1306 ecranOLED(nombreDePixelsEnLargeur, nombreDePixelsEnHauteur, &Wire, brocheResetOLED);
+Adafruit_SSD1306 ecranOLED(nombreDePixelsEnLargeur, nombreDePixelsEnHauteur, &Wire, brocheResetOLED,100000UL, 100000UL);
 
 int bp_1_Pin  = 18 ; // stop buzzer
 int bp_2_Pin  = 19 ; // on/off
@@ -342,7 +349,7 @@ void setup() {
   xTaskCreate(
           task1_BP2_OnOff,//nom de la fonction
           "task 1 on off",// nom de la tache 
-          1000,//taille aloue a notre tache 
+          8000,//taille aloue a notre tache 
           NULL,//parameters task
           2,//priorité de la tache 
           &task1_handle // gestion de tache 
@@ -350,7 +357,7 @@ void setup() {
   xTaskCreate(
         task2_buzzer,//nom de la fonction
         "task 2 buzzer",// nom de la tache 
-        1000,//taille aloue a notre tache 
+        8000,//taille aloue a notre tache 
         NULL,//parameters task
         2,//priorité de la tache 
         &task2_handle // gestion de tache 
@@ -358,7 +365,7 @@ void setup() {
 xTaskCreate(
         task3_bp_buzzer,//nom de la fonction
         "task 3 bp 1 urg",// nom de la tache 
-        1000,//taille aloue a notre tache 
+        8000,//taille aloue a notre tache 
         NULL,//parameters task
         2,//priorité de la tache 
         &task3_handle // gestion de tache 

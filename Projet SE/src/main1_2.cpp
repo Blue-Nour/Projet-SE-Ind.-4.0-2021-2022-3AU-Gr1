@@ -42,6 +42,7 @@ unsigned long lastMsg;
 const char* ssid = "VOO-006709";
 const char* password = "JHPYEPQQ";
 
+//Variables wifi client
 WiFiClient espClient;
 PubSubClient client(espClient);
 #define MSG_BUFFER_SIZE	(50)

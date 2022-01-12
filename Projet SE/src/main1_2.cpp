@@ -13,7 +13,8 @@
 #define nombreDePixelsEnLargeur 128        
 #define nombreDePixelsEnHauteur 64       
 #define brocheResetOLED         -1       
-#define adresseI2CecranOLED     0x3C        
+#define adresseI2CecranOLED     0x3C   
+
 Adafruit_SSD1306 ecranOLED(nombreDePixelsEnLargeur, nombreDePixelsEnHauteur, &Wire, brocheResetOLED,100000UL, 100000UL);
 
 
@@ -127,7 +128,6 @@ Fonction qui (re)connecte l'esp au serveur mqtt
     // Attempt to connect
     if (client.connect(Id.c_str())) { //Si esp connectx au mqtt
       Serial.println("connected");
-      
       client.subscribe("OnOff"); //Subscribe au topic voulu
     } 
     else { //Si connexion xchouxe
@@ -341,7 +341,6 @@ void setup(){
 }
 
 void loop(){
-
   if (OnOff){
     if (!client.connected()) { //Reconnexion au mqtt si deconnexion
     reconnect();
